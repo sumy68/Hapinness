@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <title>🎟️ Ticket kaufen</title>
+  <script src="https://www.paypal.com/sdk/js?client-id=DEIN_PAYPAL_CLIENT_ID&currency=EUR"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 500px;
+      margin: auto;
+      padding: 20px;
+    }
+    h1 {
+      color: #333;
+    }
+    input {
+      width: 100%;
+      padding: 10px;
+      margin: 8px 0;
+      border: 1px solid #ccc;
+      border-radius: 5px;
+    }
+    #paypal-button-container {
+      margin-top: 20px;
+    }
+  </style>
+</head>
+<body>
+  <h1>🎟️ Ticket kaufen – 20 €</h1>
+
+  <!-- Formularfelder -->
+  <input type="text" id="vorname" placeholder="Vorname" required />
+  <input type="text" id="nachname" placeholder="Nachname" required />
+  <input type="email" id="email" placeholder="E-Mail" required />
+
+  <div id="paypal-button-container"></div>
+
+  <script>
+    paypal.Buttons({
+      createOrder: function() {
+        return fetch("/create-order", {
+          method: "POST"
+        })
+        .then(res => res.json())
+        .then(data => data.id);
+      },
+      onApprove: function(data) {
+        const vorname = document.getElementById("vorname").value.trim();
+        const nachname = document.getElementById("nachname").value.trim();
+        const email = document.getElementById("email").value.trim();
+
+        if (!vorname || !nachname || !email) {
+          alert("Bitte alle Felder ausfüllen!");
+          return;
+        }
+
+        return fetch("/capture-order", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            orderID: data.orderID,
+            vorname,
+            nachname,
+            email
+          })
+        })
+        .then(res => res.json())
+        .then(ticket => {
+          alert(`Zahlung erfolgreich! Deine Ticketnummer: ${ticket.ticketNumber}`);
+        });
+      }
+    }).render("#paypal-button-container");
+  </script>
+</body>
+</html>
