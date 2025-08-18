@@ -12,7 +12,7 @@ const sanitizeQty = (v) => {
 };
 const eur = (x) => x.toLocaleString("de-DE", { style: "currency", currency: "EUR" });
 
-// Live-Update der Gesamtsumme (falls #qty / #total existieren)
+// Live-Update der Gesamtsumme
 function updateTotal() {
   if (!$("#qty") || !$("#total")) return;
   const q = sanitizeQty($("#qty").value);
@@ -45,7 +45,7 @@ function showMsg(html) {
   else { alert(html.replace(/<[^>]+>/g, "")); }
 }
 
-// --- PayPal Buttons (Server-Variante) ---
+// --- PayPal Buttons ---
 paypal.Buttons({
   style: { layout: "vertical", color: "gold", shape: "rect", label: "paypal" },
 
@@ -57,7 +57,6 @@ paypal.Buttons({
     return actions.resolve();
   },
 
-  // Bestellung serverseitig erstellen (Manipulationsschutz)
   createOrder: () => {
     const quantity = sanitizeQty($("#qty")?.value);
     return fetch("/create-order", {
@@ -72,14 +71,13 @@ paypal.Buttons({
     .then(data => data.id);
   },
 
-  // Zahlung genehmigt -> Server capturen + Ticketmail senden
   onApprove: (data) => {
     const payload = {
       orderID: data.orderID,
       vorname: ($("#vorname")?.value || "").trim(),
       nachname: ($("#nachname")?.value || "").trim(),
       alter: ($("#alter")?.value || "").trim(),
-      email: ($("#email")?.value || "").trim(),  // muss NICHT = PayPal-Mail sein
+      email: ($("#email")?.value || "").trim(),  // <- Ticket-Mailadresse aus Formular
       quantity: sanitizeQty($("#qty")?.value)
     };
 
@@ -92,12 +90,19 @@ paypal.Buttons({
       const result = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(result?.error || "capture-order fehlgeschlagen");
       if (!result.ticketNumber) throw new Error("Keine Ticketnummer erhalten.");
-      showMsg(
-        "✅ Zahlung erfolgreich!<br>" +
-        "Ticketnummer: <strong>" + result.ticketNumber + "</strong><br>" +
-        "Tickets: " + payload.quantity + " × " + eur(PRICE_EUR) + " = <strong>" + eur(payload.quantity * PRICE_EUR) + "</strong><br>" +
-        "Bestätigung an: <strong>" + payload.email + "</strong>"
-      );
+
+      // Prüfen ob Mail gesendet wurde
+      if (result.mailed) {
+        showMsg(
+          "✅ Zahlung erfolgreich!<br>" +
+          "Ticketnummer: <strong>" + result.ticketNumber + "</strong><br>" +
+          "Tickets: " + payload.quantity + " × " + eur(PRICE_EUR) + " = <strong>" +
+          eur(payload.quantity * PRICE_EUR) + "</strong><br>" +
+          "Bestätigung an: <strong>" + payload.email + "</strong>"
+        );
+      } else {
+        showMsg("⚠️ Zahlung erfolgreich, aber E-Mail konnte nicht versendet werden.");
+      }
     })
     .catch((err) => {
       console.error(err);
