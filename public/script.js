@@ -1,36 +1,53 @@
 <script>
-  const PRICE = 20.00;
-  const $ = (id) => document.getElementById(id);
+  // --- Konfiguration ---
+  const PRICE_EUR = 20.00; // Preis pro Ticket in EUR
+  const MAX_QTY   = 20;    // max. Anzahl erlaubter Tickets
 
-  function validEmail(v){ return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v); }
-  function sanitizeQty(v){
-    let n = parseInt(v,10);
-    if (Number.isNaN(n)) n = 1;
-    return Math.max(1, Math.min(20, n));
+  // Mini-Helper
+  const $ = (id) => document.getElementById(id);
+  const validEmail = (v) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test((v||"").trim());
+  const sanitizeQty = (v) => {
+    const n = parseInt(String(v).replace(/[^\d]/g, ""), 10);
+    if (Number.isNaN(n)) return 1;
+    return Math.max(1, Math.min(MAX_QTY, n));
+  };
+  const calcTotal = () => (sanitizeQty($("#qty")?.value) * PRICE_EUR).toFixed(2);
+
+  // (Optional) Live-Update der Gesamtsumme, falls du ein #total-Element hast
+  if ($("#qty") && $("#total")) {
+    $("#qty").addEventListener("input", () => { $("#total").textContent = calcTotal() + " €"; });
+    $("#total").textContent = calcTotal() + " €";
   }
 
-  // Optional: Gesamtpreis-Anzeige aktualisieren (falls du ein #qty und #total hast)
-  // $("#qty").addEventListener("input", () => { $("#total").textContent = (sanitizeQty($("#qty").value)*PRICE).toFixed(2) + " €"; });
-
+  // PayPal-Buttons initialisieren (rein clientseitig)
   paypal.Buttons({
     style: { layout: "vertical", color: "gold", shape: "rect", label: "paypal" },
 
+    // Vorprüfungen beim Klick (Form-Validierung)
     onClick: (data, actions) => {
       const email = ($("#email")?.value || "").trim();
-      const qty = sanitizeQty($("#qty")?.value || "1");
-      if (!validEmail(email)) { alert("Bitte eine gültige E-Mail eingeben."); return actions.reject(); }
-      if (qty < 1) { alert("Bitte mindestens 1 Ticket wählen."); return actions.reject(); }
+      const qty   = sanitizeQty($("#qty")?.value);
+
+      if (!validEmail(email)) {
+        alert("Bitte eine gültige E-Mail eingeben.");
+        return actions.reject();
+      }
+      if (!qty || qty < 1) {
+        alert("Bitte mindestens 1 Ticket wählen.");
+        return actions.reject();
+      }
       return actions.resolve();
     },
 
-    // ⚠️ Clientseitige Demo — für Produktion besser serverseitig erstellen!
+    // Bestellung erstellen (Client)
     createOrder: (data, actions) => {
-      const qty = sanitizeQty($("#qty").value);
-      const total = (qty * PRICE).toFixed(2);
+      const qty   = sanitizeQty($("#qty")?.value);
+      const total = (qty * PRICE_EUR).toFixed(2);
 
       return actions.order.create({
         intent: "CAPTURE",
         purchase_units: [{
+          description: `Happiness e.V. – Tickets (${qty} × ${PRICE_EUR.toFixed(2)} €)`,
           amount: {
             currency_code: "EUR",
             value: total,
@@ -39,49 +56,29 @@
             }
           },
           items: [{
-            name: "Ticket",
+            name: "Happiness e.V. Ticket",
             quantity: String(qty),
-            unit_amount: { currency_code: "EUR", value: PRICE.toFixed(2) }
-          }],
-          description: "Tickets"
+            unit_amount: { currency_code: "EUR", value: PRICE_EUR.toFixed(2) }
+          }]
         }]
       });
-
-      // 🔒 Servervariante (empfohlen):
-      // return fetch("/create-order", { method:"POST", headers:{ "Content-Type":"application/json" }, body: JSON.stringify({ quantity: qty }) })
-      //   .then(r => r.json()).then(d => d.id);
     },
 
+    // Zahlung autorisiert → erfassen (Client)
     onApprove: async (data, actions) => {
       try {
-        // ⚠️ Clientseitig capturen (Demo). Serverseitig ist sicherer.
-        const order = await actions.order.capture();
+        const details = await actions.order.capture(); // Zahlung capturen
+        const payer   = details?.payer?.name?.given_name || "Kunde";
+        const email   = ($("#email")?.value || "").trim();
+        const qty     = sanitizeQty($("#qty")?.value);
+        const total   = (qty * PRICE_EUR).toFixed(2);
 
-        const email = ($("#email")?.value || "").trim();
-        const qty = sanitizeQty($("#qty")?.value || "1");
-        const total = (qty * PRICE).toFixed(2);
+        // ✅ Erfolgsmeldung (clientseitig)
+        alert(`Vielen Dank, ${payer}! Ihre Zahlung über ${total} € war erfolgreich.\nBestell-Nr.: ${details.id}\nBestätigungs-E-Mail: ${email}`);
 
-        // Ticket ausstellen / E-Mail versenden (Server macht das)
-        const res = await fetch("/issue-ticket", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            email,
-            quantity: qty,
-            total,
-            orderID: order.id
-          })
-        });
-
-        const result = await res.json();
-        if (!res.ok) throw new Error(result?.error || "Serverfehler");
-        alert(`✅ Zahlung ok. Ticket: ${result.ticketNo}\nGesamt: ${total} €\nE-Mail an: ${email}`);
-
-        // 🔒 Empfohlen: Statt clientseitig zu capturen:
-        // const res = await fetch("/capture-order", { method:"POST", headers:{ "Content-Type":"application/json" }, body: JSON.stringify({ orderID: data.orderID, email, quantity: qty }) });
-        // const result = await res.json(); if (!res.ok) throw new Error(result?.error || "Serverfehler");
-        // alert(`✅ Ticket: ${result.ticketNumber}`);
-
+        // TODO (optional): Hier könntest du eine Bestätigungs-Mail mit einem
+        // reinen Client-Dienst schicken (z. B. EmailJS/Formspree) oder einen
+        // eigenen Backend-Endpunkt verwenden. Auf GitHub Pages gibt es KEIN Backend.
       } catch (err) {
         console.error(err);
         alert("❌ Fehler beim Abschluss. Bitte erneut versuchen.");
