@@ -1,34 +1,23 @@
 {
+  "type": "module"
+}
+
+{
   "name": "ticket-app",
   "version": "1.0.0",
-  "main": "index.js",
+  "private": true,
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start": "node server.js",
+    "dev": "nodemon server.js"
   },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/sumy68/Hapinness.git"
-  },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "bugs": {
-    "url": "https://github.com/sumy68/Hapinness/issues"
-  },
-  "homepage": "https://github.com/sumy68/Hapinness#readme",
-  "description": "",
   "dependencies": {
     "cors": "^2.8.5",
     "dotenv": "^17.2.1",
     "express": "^5.1.0",
     "node-fetch": "^3.3.2",
     "nodemailer": "^7.0.5"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.0"
   }
-}
-{
-  "name": "ticket-app",
-  "version": "1.0.0",
-  "type": "module",            // <— hinzufügen
-  "scripts": { "start": "node server.js" },
-  ...
 }
