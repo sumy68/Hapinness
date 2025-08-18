@@ -25,3 +25,10 @@
     "nodemailer": "^7.0.5"
   }
 }
+{
+  "name": "ticket-app",
+  "version": "1.0.0",
+  "type": "module",            // <— hinzufügen
+  "scripts": { "start": "node server.js" },
+  ...
+}
