@@ -2,75 +2,157 @@
 <html lang="de">
 <head>
   <meta charset="utf-8" />
-  <title>🎟️ Ticket kaufen</title>
-  <script src="https://www.paypal.com/sdk/js?client-id=DEIN_PAYPAL_CLIENT_ID&currency=EUR"></script>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>🎟️ Tickets kaufen</title>
+
+  <!-- PayPal JS SDK: nur PayPal-Button anzeigen -->
+  <script src="https://www.paypal.com/sdk/js?client-id=AUll6OqEge1Xet4KRY9EoMTli14QZkMTAvrTJyhAxKF2-aDXeQjTdCHKN1YHv6NAam3n2L7GKuSK8jLy&currency=EUR&components=buttons&intent=capture&disable-funding=card,bancontact,blik,eps,giropay,ideal,mybank,p24,sepa,sofort,venmo,credit"></script>
+
   <style>
-    body {
-      font-family: Arial, sans-serif;
-      max-width: 500px;
-      margin: auto;
-      padding: 20px;
-    }
-    h1 {
-      color: #333;
-    }
-    input {
-      width: 100%;
-      padding: 10px;
-      margin: 8px 0;
-      border: 1px solid #ccc;
-      border-radius: 5px;
-    }
-    #paypal-button-container {
-      margin-top: 20px;
-    }
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+           max-width: 520px; margin: 40px auto; padding: 0 20px; line-height: 1.5; }
+    h1 { margin-bottom: 14px; }
+    label { display:block; font-size:14px; margin-top:10px; }
+    input { width:100%; padding:10px; margin-top:4px; border:1px solid #ccc; border-radius:8px; box-sizing:border-box; }
+    #total { font-weight:700; margin-top:10px; }
+    #paypal-button-container { margin-top:18px; }
+    #msg { margin-top:14px; padding:12px; border-radius:8px; background:rgba(0,128,0,.08);}
+    .muted { color:#666; font-size:13px; }
   </style>
 </head>
 <body>
-  <h1>🎟️ Ticket kaufen – 20 €</h1>
+  <h1>🎟️ Tickets kaufen</h1>
 
-  <!-- Formularfelder -->
-  <input type="text" id="vorname" placeholder="Vorname" required />
-  <input type="text" id="nachname" placeholder="Nachname" required />
-  <input type="email" id="email" placeholder="E-Mail" required />
+  <form id="ticketForm" novalidate>
+    <label for="vorname">Vorname</label>
+    <input type="text" id="vorname" required />
 
+    <label for="nachname">Nachname</label>
+    <input type="text" id="nachname" required />
+
+    <label for="alter">Alter</label>
+    <input type="number" id="alter" min="0" max="120" required />
+
+    <label for="email">E-Mail für Ticketversand</label>
+    <input type="email" id="email" inputmode="email" autocomplete="email" required />
+
+    <label for="qty">Anzahl Tickets</label>
+    <input type="number" id="qty" min="1" max="20" value="1" required />
+  </form>
+
+  <div id="total">Gesamt: 20,00 €</div>
   <div id="paypal-button-container"></div>
+  <div id="msg" role="status" aria-live="polite"></div>
 
   <script>
-    paypal.Buttons({
-      createOrder: function() {
+    const PRICE_EUR = 20.00;
+    const $ = id => document.getElementById(id);
+
+    function formatEUR(amount) {
+      return amount.toLocaleString("de-DE", { style:"currency", currency:"EUR" });
+    }
+    function clampQty(v) {
+      let n = parseInt(v,10);
+      if (Number.isNaN(n)) n = 1;
+      return Math.max(1, Math.min(20, n));
+    }
+    function updateTotal() {
+      const q = clampQty($("qty").value);
+      $("qty").value = q;
+      $("total").textContent = "Gesamt: " + formatEUR(q * PRICE_EUR);
+    }
+    $("qty").addEventListener("input", updateTotal);
+    updateTotal();
+
+    function validEmail(e) { return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e); }
+    function formValid() {
+      const v = $("vorname").value.trim();
+      const n = $("nachname").value.trim();
+      const a = parseInt($("alter").value,10);
+      const e = $("email").value.trim();
+      const q = clampQty($("qty").value);
+      return v && n && Number.isInteger(a) && a >= 0 && validEmail(e) && q >= 1;
+    }
+
+    // Nur PayPal als Funding-Quelle
+    const paypalButtons = paypal.Buttons({
+      fundingSource: paypal.FUNDING.PAYPAL,
+      style: { layout:"vertical", color:"gold", shape:"rect", label:"paypal" },
+
+      onInit: (data, actions) => {
+        // Button erst aktivieren, wenn Formular gültig
+        actions.disable();
+        ["vorname","nachname","alter","email","qty"].forEach(id => {
+          $(id).addEventListener("input", () => {
+            formValid() ? actions.enable() : actions.disable();
+          });
+        });
+      },
+
+      onClick: (data, actions) => {
+        if (!formValid()) {
+          alert("Bitte alle Felder korrekt ausfüllen.");
+          return actions.reject();
+        }
+        // Wichtig: Die Formular-E-Mail wird verwendet – sie muss NICHT der PayPal-E-Mail entsprechen.
+        return actions.resolve();
+      },
+
+      // Order auf dem Server anlegen (sichere Preisberechnung)
+      createOrder: () => {
+        const quantity = clampQty($("qty").value);
         return fetch("/create-order", {
-          method: "POST"
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ quantity })
         })
         .then(res => res.json())
         .then(data => data.id);
       },
-      onApprove: function(data) {
-        const vorname = document.getElementById("vorname").value.trim();
-        const nachname = document.getElementById("nachname").value.trim();
-        const email = document.getElementById("email").value.trim();
 
-        if (!vorname || !nachname || !email) {
-          alert("Bitte alle Felder ausfüllen!");
-          return;
-        }
+      // Nach Genehmigung: Server capturt, wir senden zusätzlich die Formular-Daten mit
+      onApprove: (data) => {
+        const payload = {
+          orderID: data.orderID,
+          vorname: $("vorname").value.trim(),
+          nachname: $("nachname").value.trim(),
+          alter: $("alter").value.trim(),
+          email: $("email").value.trim(),     // <-- diese E-Mail wird für den Ticketversand verwendet
+          quantity: clampQty($("qty").value)
+        };
 
         return fetch("/capture-order", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            orderID: data.orderID,
-            vorname,
-            nachname,
-            email
-          })
+          body: JSON.stringify(payload)
         })
         .then(res => res.json())
-        .then(ticket => {
-          alert(`Zahlung erfolgreich! Deine Ticketnummer: ${ticket.ticketNumber}`);
+        .then(result => {
+          $("msg").innerHTML =
+            "✅ Zahlung erfolgreich!<br>" +
+            "Ticketnummer: <strong>" + result.ticketNumber + "</strong><br>" +
+            "Tickets: " + payload.quantity + " × " + formatEUR(PRICE_EUR) + "<br>" +
+            "Gesamt: " + formatEUR(payload.quantity * PRICE_EUR) + "<br>" +
+            "Bestätigung geht an: <strong>" + payload.email + "</strong>";
+        })
+        .catch(err => {
+          console.error(err);
+          alert("Fehler beim Abschluss der Zahlung.");
         });
+      },
+
+      onError: (err) => {
+        console.error(err);
+        alert("PayPal-Fehler. Bitte erneut versuchen.");
       }
-    }).render("#paypal-button-container");
+    });
+
+    paypalButtons.render("#paypal-button-container");
   </script>
+
+  <p class="muted">
+    Hinweis: Nur PayPal ist aktiviert. Die eingegebene E-Mail dient ausschließlich dem Ticketversand und muss
+    nicht mit der PayPal-E-Mail übereinstimmen.
+  </p>
 </body>
 </html>
