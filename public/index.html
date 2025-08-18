@@ -16,7 +16,7 @@
     input { width:100%; padding:10px; margin-top:4px; border:1px solid #ccc; border-radius:8px; box-sizing:border-box; }
     #total { font-weight:700; margin-top:10px; }
     #paypal-button-container { margin-top:18px; }
-    #msg { margin-top:14px; padding:12px; border-radius:8px; display:none; }
+    #msg { margin-top:14px; padding:12px; border-radius:8px; display:none; white-space:pre-line; }
     #msg.success { background:rgba(0,128,0,.1); color:#064; }
     #msg.error   { background:rgba(255,0,0,.1); color:#600; }
     #msg.info    { background:rgba(0,0,255,.08); color:#004; }
@@ -26,21 +26,21 @@
 <body>
   <h1>🎟️ Tickets kaufen</h1>
 
-  <form id="ticketForm" novalidate>
+  <form id="ticketForm">
     <label for="vorname">Vorname</label>
-    <input type="text" id="vorname" required />
+    <input type="text" id="vorname" />
 
     <label for="nachname">Nachname</label>
-    <input type="text" id="nachname" required />
+    <input type="text" id="nachname" />
 
     <label for="geburtsdatum">Geburtsdatum</label>
-    <input type="date" id="geburtsdatum" required />
+    <input type="date" id="geburtsdatum" />
 
     <label for="email">E-Mail für Ticketversand</label>
-    <input type="email" id="email" inputmode="email" autocomplete="email" required />
+    <input type="email" id="email" inputmode="email" autocomplete="email" />
 
     <label for="qty">Anzahl Tickets</label>
-    <input type="number" id="qty" min="1" max="20" value="1" required />
+    <input type="number" id="qty" min="1" max="20" value="1" />
   </form>
 
   <div id="total">Gesamt: 20,00 €</div>
@@ -57,7 +57,6 @@
     const MAX_QTY   = 20;
     const $ = id => document.getElementById(id);
 
-    const validEmail = (v) => /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test((v||"").trim());
     const clampQty = (v) => {
       let n = parseInt(v,10);
       if (Number.isNaN(n)) n = 1;
@@ -73,15 +72,6 @@
     $("qty").addEventListener("input", updateTotal);
     updateTotal();
 
-    function formValid(){
-      const v = $("vorname").value.trim();
-      const n = $("nachname").value.trim();
-      const g = $("geburtsdatum").value.trim(); // <-- neues Feld
-      const e = $("email").value.trim();
-      const q = clampQty($("qty").value);
-      return v && n && g && validEmail(e) && q >= 1;
-    }
-
     function showMsg(text, type="info"){
       const box = $("msg");
       box.className = type;
@@ -93,20 +83,8 @@
       fundingSource: paypal.FUNDING.PAYPAL,
       style: { layout:"vertical", color:"gold", shape:"rect", label:"paypal" },
 
-      onInit: (data, actions) => {
-        actions.disable();
-        ["vorname","nachname","geburtsdatum","email","qty"].forEach(id => {
-          $(id).addEventListener("input", () => formValid() ? actions.enable() : actions.disable());
-        });
-      },
-
-      onClick: (data, actions) => {
-        if (!formValid()) {
-          showMsg("Bitte alle Felder korrekt ausfüllen.", "error");
-          return actions.reject();
-        }
-        showMsg("⏳ Bitte warten, Bestellung wird erstellt...", "info");
-        return actions.resolve();
+      onClick: () => {
+        showMsg("⏳ Bestellung wird erstellt...", "info");
       },
 
       createOrder: (data, actions) => {
@@ -139,12 +117,12 @@
 
           showMsg(
             "✅ Zahlung erfolgreich!\n\n" +
-            "Bestell-ID: " + details.id + "\\n" +
-            "Name: " + $("vorname").value.trim() + " " + $("nachname").value.trim() + "\\n" +
-            "Geburtsdatum: " + $("geburtsdatum").value + "\\n" +
-            "Tickets: " + qty + " × " + formatEUR(PRICE_EUR) + "\\n" +
-            "Gesamt: " + formatEUR(total) + "\\n" +
-            "Bestätigung an: " + $("email").value.trim(),
+            "Bestell-ID: " + details.id + "\n" +
+            "Name: " + ($("vorname").value.trim() || "-") + " " + ($("nachname").value.trim() || "-") + "\n" +
+            "Geburtsdatum: " + ($("geburtsdatum").value || "-") + "\n" +
+            "Tickets: " + qty + " × " + formatEUR(PRICE_EUR) + "\n" +
+            "Gesamt: " + formatEUR(total) + "\n" +
+            "Bestätigung an: " + ($("email").value.trim() || "-"),
             "success"
           );
         } catch (err) {
