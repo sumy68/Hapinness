@@ -1,37 +1,26 @@
 // ===================== Setup =====================
 import dotenv from "dotenv";
-dotenv.config({ override: true }); // .env einlesen
+dotenv.config({ override: true });
 
 import express from "express";
 import fetch from "node-fetch";
 import nodemailer from "nodemailer";
+import path from "path";
+import { fileURLToPath } from "url";
 import ticketMailTemplate from "./mailTemplate.js";
-import cors from "cors";
+
+// Pfade für static files
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const app = express();
-
-// ---- CORS erlauben (Frontend = GitHub Pages) ----
-app.use(
-  cors({
-    origin: [
-      "https://sumy68.github.io",          // GitHub Pages Domain
-      "https://sumy68.github.io/Hapinness" // dein Projekt-Pfad
-    ],
-    methods: ["GET", "POST"],
-  })
-);
-
-// ---- Body Parser & Static ----
 app.use(express.json());
-app.use(express.static("public")); // /public für index.html, js, css …
-
+app.use(express.static(path.join(__dirname, "public"))); // dient index.html, script.js, css …
 
 // ===================== PayPal =====================
-const MODE = process.env.PAYPAL_MODE === "live" ? "live" : "sandbox";
+const MODE = (process.env.PAYPAL_MODE || "sandbox").toLowerCase() === "live" ? "live" : "sandbox";
 const PAYPAL_API =
-  MODE === "live"
-    ? "https://api-m.paypal.com"
-    : "https://api-m.sandbox.paypal.com";
+  MODE === "live" ? "https://api-m.paypal.com" : "https://api-m.sandbox.paypal.com";
 const PAYPAL_CLIENT_ID = process.env.PAYPAL_CLIENT_ID;
 const PAYPAL_CLIENT_SECRET = process.env.PAYPAL_CLIENT_SECRET;
 
@@ -48,16 +37,6 @@ const clampQty = (q) => {
 const secureFlag = String(process.env.SMTP_SECURE).toLowerCase() === "true";
 const smtpAuthMethod = (process.env.SMTP_AUTH || "LOGIN").toUpperCase();
 
-console.log(
-  "SMTP cfg => host=%s port=%s secure=%s user=%s auth=%s",
-  process.env.SMTP_HOST,
-  process.env.SMTP_PORT,
-  process.env.SMTP_SECURE,
-  process.env.SMTP_USER,
-  smtpAuthMethod
-);
-console.log("MAIL_FROM =", process.env.MAIL_FROM || process.env.SMTP_USER);
-
 const transporter = nodemailer.createTransport({
   host: process.env.SMTP_HOST,
   port: Number(process.env.SMTP_PORT || (secureFlag ? 465 : 587)),
@@ -72,9 +51,10 @@ const transporter = nodemailer.createTransport({
   debug: true,
 });
 
-transporter.verify((err, ok) => {
+// optional prüfen
+transporter.verify((err) => {
   if (err) console.error("SMTP verify failed:", err);
-  else console.log("SMTP ready:", ok);
+  else console.log("SMTP ready: true");
 });
 
 // ===================== PayPal Helper =====================
@@ -84,15 +64,12 @@ async function getAccessToken() {
     headers: {
       Authorization:
         "Basic " +
-        Buffer.from(`${PAYPAL_CLIENT_ID}:${PAYPAL_CLIENT_SECRET}`).toString(
-          "base64"
-        ),
+        Buffer.from(`${PAYPAL_CLIENT_ID}:${PAYPAL_CLIENT_SECRET}`).toString("base64"),
       "Content-Type": "application/x-www-form-urlencoded",
     },
     body: "grant_type=client_credentials",
   });
-  if (!res.ok)
-    throw new Error("PayPal OAuth fehlgeschlagen: " + (await res.text()));
+  if (!res.ok) throw new Error("PayPal OAuth fehlgeschlagen: " + (await res.text()));
   const data = await res.json();
   return data.access_token;
 }
@@ -117,10 +94,7 @@ app.post("/create-order", async (req, res) => {
             {
               name: "Ticket",
               quantity: String(quantity),
-              unit_amount: {
-                currency_code: "EUR",
-                value: PRICE_EUR.toFixed(2),
-              },
+              unit_amount: { currency_code: "EUR", value: PRICE_EUR.toFixed(2) },
             },
           ],
           description: "Tickets",
@@ -151,37 +125,33 @@ app.post("/capture-order", async (req, res) => {
   try {
     const { orderID, vorname, nachname, email, quantity } = req.body;
     const qty = clampQty(quantity);
-    const expectedTotal = (qty * PRICE_EUR).toFixed(2);
 
     const accessToken = await getAccessToken();
-    const capRes = await fetch(
-      `${PAYPAL_API}/v2/checkout/orders/${orderID}/capture`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${accessToken}`,
-        },
-      }
-    );
+    const capRes = await fetch(`${PAYPAL_API}/v2/checkout/orders/${orderID}/capture`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${accessToken}`,
+      },
+    });
     const capture = await capRes.json();
     if (!capRes.ok) return res.status(400).json(capture);
 
     const ticketNumber =
       capture?.purchase_units?.[0]?.payments?.captures?.[0]?.id || orderID;
 
-    // --- Mail mit Template ---
+    // Mail
     const html = ticketMailTemplate({
       vorname,
       nachname,
       ticketNumber,
       quantity: qty,
-      totalEUR: Number(expectedTotal),
+      totalEUR: qty * PRICE_EUR,
     });
 
     const info = await transporter.sendMail({
       from: process.env.MAIL_FROM || process.env.SMTP_USER,
-      to: email, // <- Adresse aus index.html
+      to: email,
       subject: `🎟️ Ihr Ticket (${ticketNumber}) – Happiness e.V.`,
       html,
     });
@@ -194,32 +164,13 @@ app.post("/capture-order", async (req, res) => {
   }
 });
 
-// ===================== Test-Email =====================
-app.post("/test-email", async (req, res) => {
-  try {
-    const { to } = req.body;
-    const info = await transporter.sendMail({
-      from: process.env.MAIL_FROM || process.env.SMTP_USER,
-      to,
-      subject: "Testmail – Ticket-App",
-      text: "Wenn du das lesen kannst, funktioniert SMTP ✓",
-    });
-    res.json({ ok: true, messageId: info.messageId });
-  } catch (e) {
-    console.error("Test mail failed:", e);
-    res.status(500).json({ ok: false, error: String(e?.message || e) });
-  }
-});
-
 // ===================== Healthcheck =====================
 app.get("/health", (_req, res) => {
   res.json({ ok: true, mode: MODE });
 });
 
-
+// ===================== Start =====================
 const PORT = process.env.PORT || 3000;
-
 app.listen(PORT, () => {
   console.log(`Server läuft auf http://localhost:${PORT} (Mode: ${MODE})`);
 });
-
