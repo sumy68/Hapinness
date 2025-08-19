@@ -1,32 +1,25 @@
+// ===================== Setup =====================
 import dotenv from "dotenv";
-dotenv.config({ override: true });
+dotenv.config({ override: true }); // .env einlesen
 
 import express from "express";
 import fetch from "node-fetch";
 import nodemailer from "nodemailer";
 
-
-
-
-
-// server.js (ESM)
-// Voraussetzungen: package.json mit { "type": "module" }
-// .env: PAYPAL_*, SMTP_*, MAIL_FROM usw.
-
-
-
 const app = express();
 app.use(express.json());
-app.use(express.static("public"));         // /public für index.html, script.js, css …
+app.use(express.static("public")); // /public für index.html, js, css …
 
-/* ===================== PayPal ===================== */
+// ===================== PayPal =====================
 const MODE = process.env.PAYPAL_MODE === "live" ? "live" : "sandbox";
 const PAYPAL_API =
-  MODE === "live" ? "https://api-m.paypal.com" : "https://api-m.sandbox.paypal.com";
+  MODE === "live"
+    ? "https://api-m.paypal.com"
+    : "https://api-m.sandbox.paypal.com";
 const PAYPAL_CLIENT_ID = process.env.PAYPAL_CLIENT_ID;
 const PAYPAL_CLIENT_SECRET = process.env.PAYPAL_CLIENT_SECRET;
 
-/* ===================== Preise / Tickets ===================== */
+// ===================== Ticket Config =====================
 const PRICE_EUR = 20.0;
 const MAX_QTY = 20;
 const clampQty = (q) => {
@@ -35,21 +28,7 @@ const clampQty = (q) => {
   return Math.max(1, Math.min(MAX_QTY, n));
 };
 
-/* ===================== SMTP (ALL-INKL / KAS) ===================== */
-/*
-  Beispiel .env (ALL-INKL):
-  SMTP_HOST=w01aa1bb.kasserver.com
-  SMTP_PORT=587
-  SMTP_SECURE=false
-  SMTP_USER=m06XXXXX            # KAS Mailbox-Login (nicht die E-Mail!)
-  SMTP_PASS=DEIN_POSTFACH_PASS
-  MAIL_FROM=info@happiness-ev.com
-  SMTP_AUTH=LOGIN               # optional: LOGIN (Standard) oder PLAIN
-
-  Für SSL direkt:
-  SMTP_PORT=465
-  SMTP_SECURE=true
-*/
+// ===================== SMTP =====================
 const secureFlag = String(process.env.SMTP_SECURE).toLowerCase() === "true";
 const smtpAuthMethod = (process.env.SMTP_AUTH || "LOGIN").toUpperCase();
 
@@ -66,32 +45,32 @@ console.log("MAIL_FROM =", process.env.MAIL_FROM || process.env.SMTP_USER);
 const transporter = nodemailer.createTransport({
   host: process.env.SMTP_HOST,
   port: Number(process.env.SMTP_PORT || (secureFlag ? 465 : 587)),
-  secure: secureFlag,                 // true -> 465 (SSL), false -> 587 (STARTTLS)
-  requireTLS: !secureFlag,            // STARTTLS nur bei 587 erzwingen
+  secure: secureFlag,
+  requireTLS: !secureFlag,
   auth: {
-    user: process.env.SMTP_USER,      // ALL-INKL: m06… Login (nicht die E-Mail!)
-    pass: process.env.SMTP_PASS
+    user: process.env.SMTP_USER,
+    pass: process.env.SMTP_PASS,
   },
   authMethod: smtpAuthMethod,
   logger: true,
   debug: true,
-  // tls: { rejectUnauthorized: false } // nur falls Zertifikat-Probleme auftreten
 });
 
-// SMTP beim Start prüfen – zeigt exakte Ursache, falls Login/Port/TLS falsch ist
 transporter.verify((err, ok) => {
   if (err) console.error("SMTP verify failed:", err);
   else console.log("SMTP ready:", ok);
 });
 
-/* ===================== PayPal Helper ===================== */
+// ===================== PayPal Helper =====================
 async function getAccessToken() {
   const res = await fetch(`${PAYPAL_API}/v1/oauth2/token`, {
     method: "POST",
     headers: {
       Authorization:
         "Basic " +
-        Buffer.from(`${PAYPAL_CLIENT_ID}:${PAYPAL_CLIENT_SECRET}`).toString("base64"),
+        Buffer.from(`${PAYPAL_CLIENT_ID}:${PAYPAL_CLIENT_SECRET}`).toString(
+          "base64"
+        ),
       "Content-Type": "application/x-www-form-urlencoded",
     },
     body: "grant_type=client_credentials",
@@ -101,7 +80,7 @@ async function getAccessToken() {
   return data.access_token;
 }
 
-/* ===================== API: Order anlegen ===================== */
+// ===================== API: Order anlegen =====================
 app.post("/create-order", async (req, res) => {
   try {
     const quantity = clampQty(req.body?.quantity);
@@ -121,7 +100,10 @@ app.post("/create-order", async (req, res) => {
             {
               name: "Ticket",
               quantity: String(quantity),
-              unit_amount: { currency_code: "EUR", value: PRICE_EUR.toFixed(2) },
+              unit_amount: {
+                currency_code: "EUR",
+                value: PRICE_EUR.toFixed(2),
+              },
             },
           ],
           description: "Tickets",
@@ -137,6 +119,7 @@ app.post("/create-order", async (req, res) => {
       },
       body: JSON.stringify(body),
     });
+
     const order = await r.json();
     if (!r.ok || !order.id) return res.status(400).json(order);
     res.json({ id: order.id });
@@ -146,29 +129,29 @@ app.post("/create-order", async (req, res) => {
   }
 });
 
-/* ===================== API: Capture + Mail senden ===================== */
+// ===================== API: Capture + Mail =====================
 app.post("/capture-order", async (req, res) => {
   try {
-    const { orderID, vorname, nachname, alter, email, quantity } = req.body;
+    const { orderID, vorname, nachname, email, quantity } = req.body;
     const qty = clampQty(quantity);
     const expectedTotal = (qty * PRICE_EUR).toFixed(2);
 
     const accessToken = await getAccessToken();
-    const capRes = await fetch(`${PAYPAL_API}/v2/checkout/orders/${orderID}/capture`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
-    });
+    const capRes = await fetch(
+      `${PAYPAL_API}/v2/checkout/orders/${orderID}/capture`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${accessToken}`,
+        },
+      }
+    );
     const capture = await capRes.json();
     if (!capRes.ok) return res.status(400).json(capture);
 
     const ticketNumber =
       capture?.purchase_units?.[0]?.payments?.captures?.[0]?.id || orderID;
-
-    // Optional: Plausibilitätscheck Betrag
-    const paid = capture?.purchase_units?.[0]?.payments?.captures?.[0]?.amount?.value;
-    if (paid && Number(paid).toFixed(2) !== expectedTotal) {
-      console.warn("Warnung: bezahlter Betrag weicht ab:", paid, "≠", expectedTotal);
-    }
 
     // Mailtext
     const html = `
@@ -181,7 +164,7 @@ app.post("/capture-order", async (req, res) => {
     `;
 
     const info = await transporter.sendMail({
-      from: process.env.MAIL_FROM || process.env.SMTP_USER, // Fallback
+      from: process.env.MAIL_FROM || process.env.SMTP_USER,
       to: email,
       subject: `Deine Tickets (${ticketNumber})`,
       html,
@@ -195,7 +178,7 @@ app.post("/capture-order", async (req, res) => {
   }
 });
 
-/* ===================== Diagnose: Test-Mail ohne PayPal ===================== */
+// ===================== Test-Email =====================
 app.post("/test-email", async (req, res) => {
   try {
     const { to } = req.body;
@@ -212,12 +195,12 @@ app.post("/test-email", async (req, res) => {
   }
 });
 
-/* ===================== Healthcheck ===================== */
+// ===================== Healthcheck =====================
 app.get("/health", (_req, res) => {
   res.json({ ok: true, mode: MODE });
 });
 
-/* ===================== Start ===================== */
+// ===================== Start =====================
 app.listen(3000, () => {
   console.log("Server läuft auf http://localhost:3000 (Mode:", MODE, ")");
 });

@@ -56,14 +56,14 @@
     const PRICE_EUR = 20.00;
     const MAX_QTY   = 20;
     const $ = id => document.getElementById(id);
-
+    
     const clampQty = (v) => {
       let n = parseInt(v,10);
       if (Number.isNaN(n)) n = 1;
       return Math.max(1, Math.min(MAX_QTY, n));
     };
     const formatEUR = (num) => Number(num).toLocaleString("de-DE",{style:"currency",currency:"EUR"});
-
+    
     function updateTotal(){
       const q = clampQty($("qty").value);
       $("qty").value = q;
@@ -71,71 +71,73 @@
     }
     $("qty").addEventListener("input", updateTotal);
     updateTotal();
-
+    
     function showMsg(text, type="info"){
       const box = $("msg");
       box.className = type;
       box.textContent = text;
       box.style.display = "block";
     }
-
+    
     paypal.Buttons({
-      fundingSource: paypal.FUNDING.PAYPAL,
       style: { layout:"vertical", color:"gold", shape:"rect", label:"paypal" },
-
-      onClick: () => {
-        showMsg("⏳ Bestellung wird erstellt...", "info");
+    
+      onClick: (data, actions) => {
+        if (!($("email").value.trim())) {
+          alert("Bitte eine gültige E-Mail für den Ticketversand eingeben!");
+          return actions.reject();
+        }
+        return actions.resolve();
       },
-
-      createOrder: (data, actions) => {
-        const qty   = clampQty($("qty").value);
-        const total = (qty * PRICE_EUR).toFixed(2);
-
-        return actions.order.create({
-          intent: "CAPTURE",
-          purchase_units: [{
-            description: `Happiness e.V. – Tickets (${qty} × ${PRICE_EUR.toFixed(2)} €)`,
-            amount: {
-              currency_code: "EUR",
-              value: total,
-              breakdown: { item_total: { currency_code: "EUR", value: total } }
-            },
-            items: [{
-              name: "Happiness e.V. Ticket",
-              quantity: String(qty),
-              unit_amount: { currency_code: "EUR", value: PRICE_EUR.toFixed(2) }
-            }]
-          }]
-        });
+    
+      // Bestellung über den Server erstellen
+      createOrder: () => {
+        const qty = clampQty($("qty").value);
+        return fetch("/create-order", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ quantity: qty })
+        })
+        .then(res => res.json())
+        .then(data => data.id);
       },
-
-      onApprove: async (data, actions) => {
-        try {
-          const details = await actions.order.capture();
-          const qty     = clampQty($("qty").value);
-          const total   = (qty * PRICE_EUR).toFixed(2);
-
+    
+      // Zahlung genehmigt -> Server capturen lassen UND Mail verschicken
+      onApprove: (data) => {
+        const payload = {
+          orderID: data.orderID,
+          vorname: $("vorname").value.trim(),
+          nachname: $("nachname").value.trim(),
+          alter: $("geburtsdatum").value.trim(),
+          email: $("email").value.trim(),
+          quantity: clampQty($("qty").value)
+        };
+    
+        return fetch("/capture-order", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        })
+        .then(res => res.json())
+        .then(result => {
+          if (!result.ticketNumber) throw new Error("Keine Ticketnummer vom Server");
           showMsg(
             "✅ Zahlung erfolgreich!\n\n" +
-            "Bestell-ID: " + details.id + "\n" +
-            "Name: " + ($("vorname").value.trim() || "-") + " " + ($("nachname").value.trim() || "-") + "\n" +
-            "Geburtsdatum: " + ($("geburtsdatum").value || "-") + "\n" +
-            "Tickets: " + qty + " × " + formatEUR(PRICE_EUR) + "\n" +
-            "Gesamt: " + formatEUR(total) + "\n" +
-            "Bestätigung an: " + ($("email").value.trim() || "-"),
+            "Ticketnummer: " + result.ticketNumber + "\n" +
+            "Tickets: " + payload.quantity + " × " + formatEUR(PRICE_EUR) + "\n" +
+            "Gesamt: " + formatEUR(payload.quantity * PRICE_EUR) + "\n" +
+            "Bestätigung an: " + payload.email,
             "success"
           );
-        } catch (err) {
+        })
+        .catch(err => {
           console.error(err);
-          showMsg("❌ Fehler beim Abschluss der Zahlung.", "error");
-        }
-      },
-
-      onError: (err) => {
-        console.error(err);
-        showMsg("❌ PayPal-Fehler. Bitte erneut versuchen.", "error");
+          showMsg("❌ Fehler beim Abschluss / Mailversand: " + err.message, "error");
+        });
       }
+    
     }).render("#paypal-button-container");
-  </script>
+    </script>
+    
 </body>
 </html>
