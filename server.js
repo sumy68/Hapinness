@@ -5,6 +5,7 @@ dotenv.config({ override: true }); // .env einlesen
 import express from "express";
 import fetch from "node-fetch";
 import nodemailer from "nodemailer";
+import ticketMailTemplate from "./mailTemplate.js"; // <-- NEU
 
 const app = express();
 app.use(express.json());
@@ -75,7 +76,8 @@ async function getAccessToken() {
     },
     body: "grant_type=client_credentials",
   });
-  if (!res.ok) throw new Error("PayPal OAuth fehlgeschlagen: " + (await res.text()));
+  if (!res.ok)
+    throw new Error("PayPal OAuth fehlgeschlagen: " + (await res.text()));
   const data = await res.json();
   return data.access_token;
 }
@@ -153,20 +155,19 @@ app.post("/capture-order", async (req, res) => {
     const ticketNumber =
       capture?.purchase_units?.[0]?.payments?.captures?.[0]?.id || orderID;
 
-    // Mailtext
-    const html = `
-      <p>Hallo ${vorname} ${nachname},</p>
-      <p>vielen Dank für deinen Kauf.</p>
-      <p><strong>Ticketnummer:</strong> ${ticketNumber}<br>
-         <strong>Anzahl:</strong> ${qty}<br>
-         <strong>Gesamt:</strong> ${expectedTotal} €</p>
-      <p>Viel Spaß beim Event!</p>
-    `;
+    // --- Mail mit Template ---
+    const html = ticketMailTemplate({
+      vorname,
+      nachname,
+      ticketNumber,
+      quantity: qty,
+      totalEUR: Number(expectedTotal),
+    });
 
     const info = await transporter.sendMail({
       from: process.env.MAIL_FROM || process.env.SMTP_USER,
-      to: email,
-      subject: `Deine Tickets (${ticketNumber})`,
+      to: email, // <- Adresse aus index.html
+      subject: `🎟️ Ihr Ticket (${ticketNumber}) – Happiness e.V.`,
       html,
     });
     console.log("Mail sent:", info.messageId, info.response);
