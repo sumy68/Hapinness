@@ -169,7 +169,6 @@ app.get("/health", (_req, res) => {
   res.json({ ok: true, mode: MODE });
 });
 
-// ===================== Start =====================
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Server läuft auf http://localhost:${PORT} (Mode: ${MODE})`);
