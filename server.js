@@ -3,24 +3,39 @@ import dotenv from "dotenv";
 dotenv.config({ override: true });
 
 import express from "express";
-import fetch from "node-fetch";
+// import fetch from "node-fetch"; // ENTFERNT – Node 20 hat global fetch
 import nodemailer from "nodemailer";
 import path from "path";
 import { fileURLToPath } from "url";
 import ticketMailTemplate from "./mailTemplate.js";
+import cors from "cors"; // optional, falls Frontend separat gehostet wird
 
 // Pfade für static files
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
+
+// --- OPTIONAL: CORS nur, wenn dein Frontend NICHT vom selben Host kommt ---
+const allowedOrigins = [
+  "https://hapinness.onrender.com", // deine Render-Domain
+  "http://localhost:5173",
+  "http://localhost:3000"
+];
+app.use(cors({
+  origin(origin, cb) {
+    if (!origin) return cb(null, true); // z.B. curl/Server-zu-Server
+    if (allowedOrigins.includes(origin)) return cb(null, true);
+    return cb(new Error("Not allowed by CORS: " + origin));
+  }
+}));
+
 app.use(express.json());
 app.use(express.static(path.join(__dirname, "public"))); // dient index.html, script.js, css …
 
 // ===================== PayPal =====================
 const MODE = (process.env.PAYPAL_MODE || "sandbox").toLowerCase() === "live" ? "live" : "sandbox";
-const PAYPAL_API =
-  MODE === "live" ? "https://api-m.paypal.com" : "https://api-m.sandbox.paypal.com";
+const PAYPAL_API = MODE === "live" ? "https://api-m.paypal.com" : "https://api-m.sandbox.paypal.com";
 const PAYPAL_CLIENT_ID = process.env.PAYPAL_CLIENT_ID;
 const PAYPAL_CLIENT_SECRET = process.env.PAYPAL_CLIENT_SECRET;
 
@@ -51,7 +66,6 @@ const transporter = nodemailer.createTransport({
   debug: true,
 });
 
-// optional prüfen
 transporter.verify((err) => {
   if (err) console.error("SMTP verify failed:", err);
   else console.log("SMTP ready: true");
@@ -62,9 +76,7 @@ async function getAccessToken() {
   const res = await fetch(`${PAYPAL_API}/v1/oauth2/token`, {
     method: "POST",
     headers: {
-      Authorization:
-        "Basic " +
-        Buffer.from(`${PAYPAL_CLIENT_ID}:${PAYPAL_CLIENT_SECRET}`).toString("base64"),
+      Authorization: "Basic " + Buffer.from(`${PAYPAL_CLIENT_ID}:${PAYPAL_CLIENT_SECRET}`).toString("base64"),
       "Content-Type": "application/x-www-form-urlencoded",
     },
     body: "grant_type=client_credentials",
@@ -140,7 +152,6 @@ app.post("/capture-order", async (req, res) => {
     const ticketNumber =
       capture?.purchase_units?.[0]?.payments?.captures?.[0]?.id || orderID;
 
-    // Mail
     const html = ticketMailTemplate({
       vorname,
       nachname,

@@ -39,12 +39,12 @@
   </style>
 
   <!-- PayPal JS SDK (LIVE) – Hinweis: Client-ID ist öffentlich & gehört clientseitig hin -->
-  <script src="https://www.paypal.com/sdk/js?client-id=AXhWhmESFDnMHbhG_Vktz5V4ko3lXnzMjoUDDYJy8VWHm5ktfQMEJ47cHUKLr4Z1eBnCPeWle48gNZLl&currency=EUR&locale=de_DE&components=buttons&disable-funding=card,paylater,sepa" defer></script>
+  <script src="https://www.paypal.com/sdk/js?client-id=AXhWhmESFDnMHbhG_Vktz5V4ko3lXnzMjoUDDYJy8VWHm5ktfQMEJ47cHUKLr4Z1eBnCPeWle48gNZLl&currency=EUR&locale=de_DE&components=buttons&intent=capture&disable-funding=card,paylater,sepa" defer></script>
 
   <!-- Inline-Initialisierung damit die Datei standalone funktioniert -->
   <script defer>
     document.addEventListener('DOMContentLoaded', () => {
-      const PRICE = 20.00; // EUR pro Ticket
+      const PRICE = 20.00; // EUR pro Ticket (nur Anzeige)
 
       const qtyEl      = document.getElementById('qty');
       const totalEl    = document.getElementById('total');
@@ -73,52 +73,51 @@
       qtyEl.addEventListener('input', clampQty);
       clampQty();
 
-      // Robust: warte bis das PayPal SDK wirklich verfügbar ist (auch wenn ein Content-Blocker kurze Verzögerungen verursacht)
+      async function postJSON(url, payload){
+        const r = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        if (!r.ok) throw new Error(await r.text());
+        return r.json();
+      }
+
       function initButtons(){
-        if (!window.paypal || typeof paypal.Buttons !== 'function') {
-          // versuche es ganz kurz erneut
-          return setTimeout(initButtons, 50);
-        }
+        if (!window.paypal || typeof paypal.Buttons !== 'function') return setTimeout(initButtons, 50);
 
         paypal.Buttons({
           style: { layout: 'vertical', label: 'paypal', shape: 'pill' },
 
-          createOrder(data, actions) {
+          // Order wird auf dem Server erzeugt
+          createOrder(){
             const q = clampQty();
-            const amount = (q * PRICE).toFixed(2); // PayPal erwartet Punkt als Dezimaltrenner
-            return actions.order.create({
-              purchase_units: [{
-                amount: { currency_code: 'EUR', value: amount },
-                description: `${q} Ticket(s) – Happiness e.V.`
-              }],
-              payer: {
-                name: {
-                  given_name: vornameEl.value || undefined,
-                  surname: nachnameEl.value || undefined
-                },
-                email_address: emailEl.value || undefined
-              },
-              application_context: {
-                shipping_preference: 'NO_SHIPPING',
-                user_action: 'PAY_NOW'
+            return postJSON('/create-order', { quantity: q }).then(({ id }) => id);
+          },
+
+          // Server captured + verschickt Mail
+          onApprove(data){
+            const q = clampQty();
+            return postJSON('/capture-order', {
+              orderID: data.orderID,
+              vorname: vornameEl.value,
+              nachname: nachnameEl.value,
+              email: emailEl.value,
+              quantity: q
+            }).then(resp => {
+              if (resp?.mailed) {
+                show('success', `Danke! Ticket ${resp.ticketNumber} wurde per E‑Mail versendet.`);
+              } else {
+                show('success', `Zahlung ok. Ticket‑Nr.: ${resp.ticketNumber}. (E‑Mail Versand unbestätigt)`);
               }
+            }).catch(err => {
+              console.error(err);
+              show('error', 'Serverfehler beim Capturen oder Mailversand.');
             });
           },
 
-          onApprove(data, actions) {
-            return actions.order.capture().then(details => {
-              show('success', `Danke, ${details?.payer?.name?.given_name || '🎉'}! Zahlung ${details.id} erfolgreich.`);
-            });
-          },
-
-          onCancel() {
-            show('info', 'Zahlung abgebrochen. Du kannst es jederzeit nochmal versuchen.');
-          },
-
-          onError(err) {
-            console.error(err);
-            show('error', 'Es gab ein Problem mit PayPal. Bitte später erneut versuchen oder Ad-/Tracking-Blocker prüfen.');
-          }
+          onCancel(){ show('info', 'Zahlung abgebrochen.'); },
+          onError(err){ console.error(err); show('error', 'Es gab ein Problem mit PayPal/Server.'); }
         }).render('#paypal-button-container');
       }
 
