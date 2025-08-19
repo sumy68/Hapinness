@@ -38,10 +38,93 @@
     .center { display:flex; justify-content:center }
   </style>
 
-  <!-- PayPal JS SDK (LIVE) – Client-ID eingesetzt -->
-  <script src="https://www.paypal.com/sdk/js?client-id=AXhWhmESFDnMHbhG_Vktz5V4ko3lXnzMjoUDDYJy8VWHm5ktfQMEJ47cHUKLr4Z1eBnCPeWle48gNZLl&currency=EUR" defer></script>
-  <!-- Dein Initialisierungs-Script -->
-  <script src="/script.js" defer></script>
+  <!-- PayPal JS SDK (LIVE) – Hinweis: Client-ID ist öffentlich & gehört clientseitig hin -->
+  <script src="https://www.paypal.com/sdk/js?client-id=AXhWhmESFDnMHbhG_Vktz5V4ko3lXnzMjoUDDYJy8VWHm5ktfQMEJ47cHUKLr4Z1eBnCPeWle48gNZLl&currency=EUR&locale=de_DE&components=buttons&disable-funding=card,paylater,sepa" defer></script>
+
+  <!-- Inline-Initialisierung damit die Datei standalone funktioniert -->
+  <script defer>
+    document.addEventListener('DOMContentLoaded', () => {
+      const PRICE = 20.00; // EUR pro Ticket
+
+      const qtyEl      = document.getElementById('qty');
+      const totalEl    = document.getElementById('total');
+      const msgEl      = document.getElementById('msg');
+      const vornameEl  = document.getElementById('vorname');
+      const nachnameEl = document.getElementById('nachname');
+      const emailEl    = document.getElementById('email');
+
+      function eur(n){
+        return n.toLocaleString('de-DE', { style: 'currency', currency: 'EUR' });
+      }
+      function clampQty(){
+        let q = parseInt(qtyEl.value || '1', 10);
+        if (isNaN(q)) q = 1;
+        q = Math.max(1, Math.min(20, q));
+        qtyEl.value = q;
+        totalEl.textContent = `Gesamt: ${eur(q * PRICE)}`;
+        return q;
+      }
+      function show(type, text){
+        msgEl.className = type;
+        msgEl.textContent = text || '';
+        msgEl.style.display = text ? 'block' : 'none';
+      }
+
+      qtyEl.addEventListener('input', clampQty);
+      clampQty();
+
+      // Robust: warte bis das PayPal SDK wirklich verfügbar ist (auch wenn ein Content-Blocker kurze Verzögerungen verursacht)
+      function initButtons(){
+        if (!window.paypal || typeof paypal.Buttons !== 'function') {
+          // versuche es ganz kurz erneut
+          return setTimeout(initButtons, 50);
+        }
+
+        paypal.Buttons({
+          style: { layout: 'vertical', label: 'paypal', shape: 'pill' },
+
+          createOrder(data, actions) {
+            const q = clampQty();
+            const amount = (q * PRICE).toFixed(2); // PayPal erwartet Punkt als Dezimaltrenner
+            return actions.order.create({
+              purchase_units: [{
+                amount: { currency_code: 'EUR', value: amount },
+                description: `${q} Ticket(s) – Happiness e.V.`
+              }],
+              payer: {
+                name: {
+                  given_name: vornameEl.value || undefined,
+                  surname: nachnameEl.value || undefined
+                },
+                email_address: emailEl.value || undefined
+              },
+              application_context: {
+                shipping_preference: 'NO_SHIPPING',
+                user_action: 'PAY_NOW'
+              }
+            });
+          },
+
+          onApprove(data, actions) {
+            return actions.order.capture().then(details => {
+              show('success', `Danke, ${details?.payer?.name?.given_name || '🎉'}! Zahlung ${details.id} erfolgreich.`);
+            });
+          },
+
+          onCancel() {
+            show('info', 'Zahlung abgebrochen. Du kannst es jederzeit nochmal versuchen.');
+          },
+
+          onError(err) {
+            console.error(err);
+            show('error', 'Es gab ein Problem mit PayPal. Bitte später erneut versuchen oder Ad-/Tracking-Blocker prüfen.');
+          }
+        }).render('#paypal-button-container');
+      }
+
+      initButtons();
+    });
+  </script>
 </head>
 <body>
   <div class="card">
@@ -67,7 +150,7 @@
         <input id="geburtsdatum" type="date" />
       </div>
       <div>
-        <label for="email">E-Mail</label>
+        <label for="email">E‑Mail</label>
         <input id="email" type="email" placeholder="max@example.com" />
       </div>
     </div>
@@ -76,8 +159,8 @@
       <div>
         <label for="qty">Anzahl Tickets</label>
         <div class="qty">
-          <input id="qty" type="number" min="1" max="20" value="1" />
-          <div class="price" id="total">Gesamt: 20,00 €</div>
+          <input id="qty" type="number" min="1" max="20" step="1" value="1" />
+          <div class="price" id="total">Gesamt: 20,00 €</div>
         </div>
       </div>
     </div>

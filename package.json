@@ -9,7 +9,7 @@
     "dev": "nodemon server.js"
   },
   "dependencies": {
-    "cors": "^2.8.5",
+    "cors": "https://sumy68.github.io/Hapinness/",
     "dotenv": "^16.4.5",
     "express": "^4.21.2",
     "node-fetch": "^3.3.2",
