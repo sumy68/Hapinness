@@ -2,61 +2,84 @@
 <html lang="de">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>🎟️ Tickets kaufen</title>
-
-  <!-- PayPal JS SDK (LIVE) -->
-  <script src="https://www.paypal.com/sdk/js?client-id=AXhWhmESFDnMHbhG_Vktz5V4ko3lXnzMjoUDDYJy8VWHm5ktfQMEJ47cHUKLr4Z1eBnCPeWle48gNZLl&currency=EUR&components=buttons&intent=capture&disable-funding=card,bancontact,blik,eps,giropay,ideal,mybank,p24,sepa,sofort,venmo,credit"></script>
-
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Happiness e.V. – Tickets</title>
   <style>
-    :root { --box:#eee; --ok:#064; --okbg:rgba(0,128,0,.08); --err:#600; --errbg:rgba(255,0,0,.08); --info:#024; --infobg:rgba(0,0,255,.06); }
-    body { font-family: system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif; max-width: 560px; margin: 40px auto; padding: 0 16px; line-height: 1.5; }
-    h1 { margin: 0 0 14px }
-    label { display:block; font-size:14px; margin-top:10px }
-    input { width:100%; padding:10px; margin-top:4px; border:1px solid #ccc; border-radius:8px; box-sizing:border-box }
-    #total { font-weight:700; margin-top:12px }
-    #paypal-button-container { margin-top:18px }
-    #msg { margin-top:14px; padding:12px; border-radius:8px; display:none; white-space:pre-line }
-    #msg.success { background:var(--okbg); color:var(--ok) }
-    #msg.error   { background:var(--errbg); color:var(--err) }
-    #msg.info    { background:var(--infobg); color:var(--info) }
-    .muted { color:#666; font-size:13px; margin-top:12px }
-    .row { display:grid; grid-template-columns:1fr 1fr; gap:12px }
+    :root { --bg:#0b1020; --card:#121a33; --text:#e9eefc; --muted:#9fb3ff; --accent:#ffd700; }
+    * { box-sizing: border-box; }
+    html,body { height:100%; margin:0; font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial; background:var(--bg); color:var(--text); }
+    .wrap { min-height:100%; display:grid; place-items:center; padding:24px; }
+    .card { width:100%; max-width:520px; background:var(--card); border-radius:18px; padding:24px; box-shadow:0 10px 30px rgba(0,0,0,.35); }
+    h1 { margin:0 0 6px; font-size:22px; }
+    .sub { color:var(--muted); margin:0 0 18px; font-size:14px; }
+    .grid { display:grid; gap:14px; }
+    label { font-size:13px; color:var(--muted); display:block; margin-bottom:6px; }
+    input,select { width:100%; padding:12px 14px; border:1px solid #2a3461; border-radius:12px; background:#0e1530; color:var(--text); outline:none; }
+    input:focus { border-color:#3e57c2; }
+    .row { display:grid; gap:12px; grid-template-columns:1fr 1fr; }
+    .price { margin-top:4px; font-size:14px; color:var(--muted); }
+    .msg { display:none; margin-top:12px; padding:10px 12px; border-radius:10px; font-size:14px; white-space:pre-line; }
+    .msg.info { background:#143054; }
+    .msg.success { background:#0f4d2f; }
+    .msg.error { background:#5a1c1c; }
+    .center { display:grid; place-items:center; }
+    #paypal-button-container { margin-top:10px; }
   </style>
+
+  <!-- PayPal SDK (Mode muss zur .env passen) -->
+  <!-- Für LIVE:   https://www.paypal.com/sdk/js -->
+  <!-- Für SANDBOX: https://www.sandbox.paypal.com/sdk/js -->
+  <script
+  src="https://www.paypal.com/sdk/js?client-id=AXhWhmESFDnMHbhG_Vktz5V4ko3lXnzMjoUDDYJy8VWHm5ktfQMEJ47cHUKLr4Z1eBnCPeWle48gNZLl&currency=EUR&intent=capture">
+</script>
+
 </head>
 <body>
-  <h1>🎟️ Tickets kaufen</h1>
+  <div class="wrap">
+    <div class="card">
+      <h1>Tickets kaufen</h1>
+      <p class="sub">Bezahlen nur mit PayPal. E-Ticket kommt per E-Mail.</p>
 
-  <form id="ticketForm" onsubmit="return false;">
-    <div class="row">
-      <div>
-        <label for="vorname">Vorname</label>
-        <input type="text" id="vorname" autocomplete="given-name" required />
-      </div>
-      <div>
-        <label for="nachname">Nachname</label>
-        <input type="text" id="nachname" autocomplete="family-name" required />
+      <div class="grid">
+        <div class="row">
+          <div>
+            <label for="vorname">Vorname</label>
+            <input id="vorname" autocomplete="given-name" />
+          </div>
+          <div>
+            <label for="nachname">Nachname</label>
+            <input id="nachname" autocomplete="family-name" />
+          </div>
+        </div>
+
+        <div>
+          <label for="geburtsdatum">Geburtsdatum</label>
+          <input id="geburtsdatum" type="date" />
+        </div>
+
+        <div>
+          <label for="email">E-Mail</label>
+          <input id="email" type="email" autocomplete="email" />
+        </div>
+
+        <div class="row">
+          <div>
+            <label for="qty">Anzahl</label>
+            <input id="qty" type="number" min="1" max="20" value="1" />
+          </div>
+          <div class="center">
+            <div class="price">
+              Preis: <span id="price-each">20,00 €</span><br />
+              Summe: <strong id="price-total">20,00 €</strong>
+            </div>
+          </div>
+        </div>
+
+        <div id="paypal-button-container"></div>
+        <div id="msg" class="msg"></div>
       </div>
     </div>
-
-    <label for="geburtsdatum">Geburtsdatum</label>
-    <input type="date" id="geburtsdatum" required />
-
-    <label for="email">E-Mail für Ticketversand</label>
-    <input type="email" id="email" inputmode="email" autocomplete="email" required />
-
-    <label for="qty">Anzahl Tickets</label>
-    <input type="number" id="qty" min="1" max="20" value="1" required />
-  </form>
-
-  <div id="total">Gesamt: 20,00 €</div>
-  <div id="paypal-button-container"></div>
-  <div id="msg" role="status" aria-live="polite"></div>
-
-  <p class="muted">
-    Hinweis: Als Bezahlart ist nur PayPal aktiv. Die hier eingegebene E-Mail wird ausschließlich
-    für den Ticketversand verwendet und muss nicht mit der PayPal-Adresse übereinstimmen.
-  </p>
+  </div>
 
   <script>
     // ------- Config & Helpers -------
@@ -70,39 +93,40 @@
       if (Number.isNaN(n)) n = 1;
       return Math.max(1, Math.min(MAX_QTY, n));
     };
-
     function showMsg(text, type="info") {
       const box = $("msg");
-      box.className = type;
+      box.className = "msg " + type;
       box.textContent = text;
       box.style.display = "block";
     }
-
-    function updateTotal(){
-      const q = clampQty($("qty").value);
-      $("qty").value = q;
-      $("total").textContent = "Gesamt: " + eur(q * PRICE_EUR);
-    }
-    $("qty").addEventListener("input", updateTotal);
-    updateTotal();
-
     function formValid() {
       const vorname = $("vorname").value.trim();
       const nachname = $("nachname").value.trim();
       const geburtsdatum = $("geburtsdatum").value.trim();
       const email = $("email").value.trim();
       const qty = clampQty($("qty").value);
-      if (!vorname || !nachname) return false;
-      if (!geburtsdatum) return false;
-      if (!validEmail(email)) return false;
-      if (!qty || qty < 1) return false;
-      return true;
+      return !!(vorname && nachname && geburtsdatum && validEmail(email) && qty >= 1);
     }
+    function formPayload(quantityOnly=false) {
+      const payload = { quantity: clampQty($("qty").value) };
+      if (!quantityOnly) {
+        Object.assign(payload, {
+          vorname:  $("vorname").value.trim(),
+          nachname: $("nachname").value.trim(),
+          alter:    $("geburtsdatum").value.trim(), // server erwartet 'alter' als string
+          email:    $("email").value.trim()
+        });
+      }
+      return payload;
+    }
+    // Summe live updaten
+    const updateTotal = () => { $("price-total").textContent = eur(clampQty($("qty").value) * PRICE_EUR); };
+    $("price-each").textContent = eur(PRICE_EUR);
+    $("qty").addEventListener("input", updateTotal); updateTotal();
 
     // ------- PayPal Buttons (Server Flow) -------
     paypal.Buttons({
       style: { layout:"vertical", color:"gold", shape:"rect", label:"paypal" },
-
       onClick: (data, actions) => {
         if (!formValid()) {
           alert("Bitte alle Felder korrekt ausfüllen (Vorname, Nachname, Geburtsdatum, E-Mail, Anzahl).");
@@ -111,43 +135,28 @@
         showMsg("⏳ Bestellung wird erstellt ...", "info");
         return actions.resolve();
       },
-
-      // 1) Order auf deinem Server erstellen
       createOrder: () => {
-        const quantity = clampQty($("qty").value);
         return fetch("/create-order", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ quantity })
+          body: JSON.stringify(formPayload(true))
         })
-        .then(res => {
-          if (!res.ok) throw new Error("create-order fehlgeschlagen");
-          return res.json();
-        })
-        .then(data => data.id);
+        .then(async (res) => {
+          const json = await res.json().catch(()=>({}));
+          if (!res.ok || !json.id) { showMsg("❌ Bestellung konnte nicht erstellt werden.", "error"); throw new Error(json.error||json.message||"create-order failed"); }
+          return json.id;
+        });
       },
-
-      // 2) Nach Genehmigung: auf deinem Server capturen + Mail versenden
       onApprove: (data) => {
-        const payload = {
-          orderID:  data.orderID,
-          vorname:  $("vorname").value.trim(),
-          nachname: $("nachname").value.trim(),
-          alter:    $("geburtsdatum").value.trim(), // Server erwartet 'alter' – hier Geburtsdatum als Text
-          email:    $("email").value.trim(),        // <<<<<<  genau diese Adresse bekommt das Ticket
-          quantity: clampQty($("qty").value)
-        };
-
+        const payload = { orderID: data.orderID, ...formPayload(false) };
         return fetch("/capture-order", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload)
         })
         .then(async (res) => {
-          const result = await res.json().catch(() => ({}));
-          if (!res.ok) throw new Error(result?.error || "capture-order fehlgeschlagen");
-          if (!result.ticketNumber) throw new Error("Keine Ticketnummer erhalten.");
-
+          const result = await res.json().catch(()=>({}));
+          if (!res.ok || !result.ticketNumber) { showMsg("❌ Fehler beim Abschluss / Mailversand.", "error"); throw new Error(result.error||result.message||"capture-order failed"); }
           showMsg(
             "✅ Zahlung erfolgreich!\n\n" +
             "Ticketnummer: " + result.ticketNumber + "\n" +
@@ -156,14 +165,10 @@
             "success"
           );
         })
-        .catch(err => {
-          console.error(err);
-          showMsg("❌ Fehler beim Abschluss / Mailversand: " + (err?.message || err), "error");
-        });
+        .catch((err)=>{ console.error(err); throw err; });
       },
-
       onError: (err) => {
-        console.error(err);
+        console.error("PayPal SDK error:", err);
         showMsg("❌ PayPal-Fehler. Bitte erneut versuchen.", "error");
       }
     }).render("#paypal-button-container");

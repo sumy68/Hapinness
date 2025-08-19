@@ -5,11 +5,26 @@ dotenv.config({ override: true }); // .env einlesen
 import express from "express";
 import fetch from "node-fetch";
 import nodemailer from "nodemailer";
-import ticketMailTemplate from "./mailTemplate.js"; // <-- NEU
+import ticketMailTemplate from "./mailTemplate.js";
+import cors from "cors";
 
 const app = express();
+
+// ---- CORS erlauben (Frontend = GitHub Pages) ----
+app.use(
+  cors({
+    origin: [
+      "https://sumy68.github.io",          // GitHub Pages Domain
+      "https://sumy68.github.io/Hapinness" // dein Projekt-Pfad
+    ],
+    methods: ["GET", "POST"],
+  })
+);
+
+// ---- Body Parser & Static ----
 app.use(express.json());
 app.use(express.static("public")); // /public für index.html, js, css …
+
 
 // ===================== PayPal =====================
 const MODE = process.env.PAYPAL_MODE === "live" ? "live" : "sandbox";
@@ -201,7 +216,8 @@ app.get("/health", (_req, res) => {
   res.json({ ok: true, mode: MODE });
 });
 
-// ===================== Start =====================
-app.listen(3000, () => {
-  console.log("Server läuft auf http://localhost:3000 (Mode:", MODE, ")");
+const PORT = process.env.PORT || 5500;
+app.listen(PORT, () => {
+  console.log(`Server läuft auf http://localhost:${PORT} (Mode:`, MODE, ")");
 });
+
