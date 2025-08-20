@@ -36,6 +36,12 @@
     .paypal { margin-top: 14px; }
     footer { margin-top: 10px; color: #8190a6; font-size: 12px; text-align:center }
     .center { display:flex; justify-content:center }
+    .btn-row { display:flex; gap:12px; justify-content:center; align-items:center; margin-top:14px; flex-wrap:wrap; }
+    .btn { display:inline-flex; align-items:center; justify-content:center; padding:12px 16px; border-radius:999px; border:1px solid rgba(255,255,255,.12); background:#0c1428; color:var(--text); text-decoration:none; font-weight:600; }
+    .btn:hover { border-color: rgba(255,255,255,.25); }
+    .btn.stripe { background:#635bff; border-color:#635bff; color:#fff; }
+    .btn.stripe:hover { filter:brightness(1.06); }
+
   </style>
 
   <!-- PayPal JS SDK (LIVE) – Hinweis: Client-ID ist öffentlich & gehört clientseitig hin -->
@@ -128,7 +134,8 @@
 <body>
   <div class="card">
     <h1>Tickets kaufen</h1>
-    <p class="sub">Bezahlung ausschließlich über PayPal.</p>
+    <p class="sub">Bezahlung über PayPal oder Stripe (Karte/Apple Pay).</p>
+
 
     <div id="msg" class="info"></div>
 
@@ -164,6 +171,17 @@
       </div>
     </div>
 
+    <div class="btn-row">
+      <a
+        class="btn stripe"
+        href="https://buy.stripe.com/dRm4greTB7h956kdYS5Ne00"
+        target="_blank"
+        rel="noopener noreferrer"
+      >
+        Mit Karte (Stripe) zahlen
+      </a>
+    </div>
+    
     <div class="paypal center">
       <div id="paypal-button-container"></div>
     </div>
