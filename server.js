@@ -10,6 +10,12 @@ import { fileURLToPath } from "url";
 import ticketMailTemplate from "./mailTemplate.js";
 import cors from "cors"; // optional, falls Frontend separat gehostet wird
 
+import Stripe from "stripe";     // NEU
+
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+const STRIPE_WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET;
+
+
 // Pfade für static files
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -22,6 +28,31 @@ const allowedOrigins = [
   "http://localhost:5173",
   "http://localhost:3000"
 ];
+
+// --- Stripe Webhook (muss VOR app.use(express.json()) stehen) ---
+app.post("/stripe-webhook",
+  express.raw({ type: "application/json" }),
+  (req, res) => {
+    const sig = req.headers["stripe-signature"];
+    let event;
+    try {
+      event = stripe.webhooks.constructEvent(req.body, sig, STRIPE_WEBHOOK_SECRET);
+    } catch (err) {
+      console.error("Stripe webhook verify failed:", err.message);
+      return res.status(400).send(`Webhook Error: ${err.message}`);
+    }
+
+    if (event.type === "checkout.session.completed") {
+      const session = event.data.object;
+      console.log("Stripe checkout success:", session.id, session.customer_email);
+      // TODO: Falls gewünscht: hier Mail mit transporter.sendMail(...) verschicken
+    }
+
+    res.json({ received: true });
+  }
+);
+
+
 app.use(cors({
   origin(origin, cb) {
     if (!origin) return cb(null, true); // z.B. curl/Server-zu-Server
